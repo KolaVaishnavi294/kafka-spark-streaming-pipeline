@@ -94,6 +94,7 @@ This command builds and launches the following containers:
 - Spark container
 
 ### Verify containers are running:
+After 60 seconds for all services to pass their health checks. You can verify the status using
 ```bash
 docker ps
 ```
@@ -104,37 +105,36 @@ Expected containers:
 - kafka-spark-pipeline-db-1
 - kafka-spark-pipeline-spark-app-1
 
-## Step 3: Run the Spark Application
-
-Submit the Spark Structured Streaming job.
+## step 3: Create the Ingestion Topic
+Manually create the user_activity topic in Kafka.
 ```bash
-docker exec -it kafka-spark-pipeline-spark-app-1 spark-submit \
---packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,org.postgresql:postgresql:42.5.0 \
-/app/spark_app.py
+docker exec -it kafka-spark-pipeline-kafka-1 kafka-topics --create --topic user_activity --bootstrap-server localhost:9092 --partitions 1 --replication-factor 1
+```
+
+## Step 4: Run the Spark Application
+Run the Spark application. This command includes the necessary Kafka and PostgreSQL drivers.
+```bash
+docker exec -it kafka-spark-pipeline-spark-app-1 spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.postgresql:postgresql:42.5.0 /app/spark_app.py
 ```
 - This starts the Spark streaming pipeline.
 
 - Keep this terminal open to monitor logs.
 
-## Step 4: Produce Test Data
+Note: Keep this terminal open. Wait until you see Streaming query has been idle and waiting for new data before proceeding.
 
-Open a new terminal and run a Kafka producer.
+## Step 5: Generate Live Events
+Open a new terminal window and start the Kafka producer:
 ```bash
-docker exec -it kafka-spark-pipeline-kafka-1 kafka-console-producer \
---bootstrap-server localhost:9092 \
---topic user_activity
+docker exec -it kafka-spark-pipeline-kafka-1 kafka-console-producer --bootstrap-server localhost:9092 --topic user_activity
 ```
 Paste the following events one at a time:
 ```bash
-{"event_time": "2026-03-13T14:00:00Z", "user_id": "fresh_user", "page_url": "/home", "event_type": "session_start"}
-
-{"event_time": "2026-03-13T14:05:00Z", "user_id": "fresh_user", "page_url": "/checkout", "event_type": "session_end"}
-
-{"event_time": "2026-03-13T14:15:00Z", "user_id": "pusher", "page_url": "/home", "event_type": "page_view"}
+{"event_time": "2026-03-13T20:35:00Z", "user_id": "user_video_01", "page_url": "/home", "event_type": "page_view"}
+{"event_time": "2026-03-13T20:41:00Z", "user_id": "user_video_01", "page_url": "/login", "event_type": "session_start"}
+{"event_time": "2026-03-13T20:43:00Z", "user_id": "user_video_01", "page_url": "/logout", "event_type": "session_end"}
+{"event_time": "2026-03-13T20:55:00Z", "user_id": "trigger_msg", "page_url": "/home", "event_type": "page_view"}
 ```
-- Wait 10 seconds, then press Ctrl + C.
-
-The pusher event forces Spark to advance event time, which allows the session window to close and results to be written to the database.
+- Wait 15 seconds for the watermark to process, then press Ctrl+C to exit the producer.
 
 ## 6. Verification Steps
 
@@ -142,17 +142,19 @@ These steps confirm that the pipeline is working correctly.
 
 ### 6.1 Verify PostgreSQL Output
 
-#### Check whether the session duration was calculated.
+#### Check whether the session duration was calculated(Stream-Stream Join)
 ```bash
 docker exec -it kafka-spark-pipeline-db-1 psql -U postgres -d streaming_db -c "SELECT * FROM user_sessions;"
 ```
 Example output:
 ```bash
-user_id | start_time | end_time | duration_seconds
-fresh_user | ... | ... | 300
+ user_id    |     start_time      |      end_time       | duration_seconds 
+---------------+---------------------+---------------------+------------------
+ user_video_01 | ---------------- | ------------------- |          120
+(1 row)
 ```
 
-#### Check page view counts:
+#### Check Windowed page view counts:
 ```bash
 docker exec -it kafka-spark-pipeline-db-1 psql -U postgres -d streaming_db -c "SELECT * FROM page_view_counts;"
 ```
@@ -163,7 +165,7 @@ Spark continuously writes raw events to the data lake.
 
 #### Check the generated partitioned files:
 ```bash
-ls ./data/lake/event_date=2026-03-13/
+docker exec -it kafka-spark-pipeline-spark-app-1 ls -R /app/data/lake
 ```
 Expected files:
 
@@ -171,23 +173,15 @@ Expected files:
 - part-00001.parquet
 - 6.3 Verify Enriched Kafka Topic
 
-#### Spark publishes enriched events with an additional processing_time field.
+#### Downstream Enrichment (Kafka)
+Verify that the enriched events (with processing_time) are being published:
 ```bash
-docker exec -it kafka-spark-pipeline-kafka-1 kafka-console-consumer \
---bootstrap-server localhost:9092 \
---topic enriched_activity \
---from-beginning \
---max-messages 1
+docker exec -it kafka-spark-pipeline-kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic enriched_activity --from-beginning --max-messages 1
 ```
 Example output:
 ```bash
-{
-"event_time": "2026-03-13T14:15:00Z",
-"user_id": "pusher",
-"page_url": "/home",
-"event_type": "page_view",
-"processing_time": "2026-03-13T14:15:03Z"
-}
+{"event_time":"2026-03-13T20:35:00.000Z","user_id":"user_video_01","page_url":"/home","event_type":"page_view","processing_time":"2026-03-13T15:08:27.598Z"}
+Processed a total of 1 messages
 ```
 
 ---

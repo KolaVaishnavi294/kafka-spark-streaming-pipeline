@@ -46,6 +46,9 @@ services:
 
   spark-app:
     build: .
+    tty: true          
+    stdin_open: true 
+    command: tail -f /dev/null    
     depends_on:
       kafka:
         condition: service_healthy

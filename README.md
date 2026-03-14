@@ -71,7 +71,7 @@ kafka-spark-pipeline
 
 Ensure the project directory contains only source files and remove any leftover streaming state.
 
-```powershell
+```bash
 rm -Recurse -Force ./checkpoints/*
 rm -Recurse -Force ./data/lake/*
 ```
@@ -157,6 +157,11 @@ Example output:
 #### Check Windowed page view counts:
 ```bash
 docker exec -it kafka-spark-pipeline-db-1 psql -U postgres -d streaming_db -c "SELECT * FROM page_view_counts;"
+```
+
+### Check Active Users Counts:
+```bash
+docker exec -it kafka-spark-pipeline-db-1 psql -U postgres -d streaming_db -c "SELECT * FROM active_users;"
 ```
 
 ### 6.2 Verify Data Lake (Parquet Files)

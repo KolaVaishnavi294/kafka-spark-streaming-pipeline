@@ -129,10 +129,11 @@ docker exec -it kafka-spark-pipeline-kafka-1 kafka-console-producer --bootstrap-
 ```
 Paste the following events one at a time:
 ```bash
-{"event_time": "2026-03-13T20:35:00Z", "user_id": "user_video_01", "page_url": "/home", "event_type": "page_view"}
-{"event_time": "2026-03-13T20:41:00Z", "user_id": "user_video_01", "page_url": "/login", "event_type": "session_start"}
-{"event_time": "2026-03-13T20:43:00Z", "user_id": "user_video_01", "page_url": "/logout", "event_type": "session_end"}
-{"event_time": "2026-03-13T20:55:00Z", "user_id": "trigger_msg", "page_url": "/home", "event_type": "page_view"}
+{"event_time": "2026-03-14T10:45:00Z", "user_id": "trigger", "page_url": "/home", "event_type": "page_view"}
+{"event_time": "2026-03-14T10:45:00Z", "user_id": "user_live_88", "page_url": "/product/detail_45", "event_type": "page_view"}
+{"event_time": "2026-03-14T10:50:00Z", "user_id": "user_100", "page_url": "/login", "event_type": "session_start"}
+{"event_time": "2026-03-14T10:52:00Z", "user_id": "user_100", "page_url": "/logout", "event_type": "session_end"}
+{"event_time": "2026-03-14T11:00:00Z", "user_id": "trigger", "page_url": "/home", "event_type": "page_view"}
 ```
 - Wait 15 seconds for the watermark to process, then press Ctrl+C to exit the producer.
 
@@ -188,7 +189,11 @@ Example output:
 {"event_time":"2026-03-13T20:35:00.000Z","user_id":"user_video_01","page_url":"/home","event_type":"page_view","processing_time":"2026-03-13T15:08:27.598Z"}
 Processed a total of 1 messages
 ```
-
+### Encriched_activity:
+It writes back to a topic called enriched_activity. Check if Spark is actually processing the data:
+```bash
+docker exec -it kafka-spark-pipeline-kafka-1 kafka-console-consumer --bootstrap-server localhost:9092 --topic enriched_activity --from-beginning
+```
 ---
 
 ## 7. Architecture Highlights
